@@ -1,0 +1,78 @@
+name: Buildroot aarch64 GUI Image
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Install Build Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential libncurses-dev bison flex \
+            gettext texinfo bc git dosfstools mtools libelf-dev libssl-dev \
+            gperf rsync unzip wget cpio python3-distutils
+
+      - name: Download Buildroot
+        run: |
+          # Fetching the stable LTS release branch
+          git clone --depth 1 --branch 2026.02.x https://github.com/buildroot/buildroot
+
+      - name: Configure Buildroot
+        run: |
+          cd buildroot
+          
+          # 1. Start with the baseline qemu aarch64 virt configuration
+          make qemu_aarch64_virt_defconfig
+          
+          # 2. Append our GUI, Framebuffer, wget, and opkg customizations
+          cat << 'EOF' >> configs/qemu_aarch64_virt_defconfig
+          # Toolchain / Core dependencies
+          BR2_PACKAGE_WGET=y
+          
+          # Package Management (opkg)
+          BR2_PACKAGE_OPKG=y
+          
+          # Graphic Libraries & Drivers (X11 + VirtIO/DRM)
+          BR2_PACKAGE_XORG7=y
+          BR2_PACKAGE_XSERVER_XORG_SERVER=y
+          BR2_PACKAGE_XSERVER_XORG_SERVER_MODULAR=y
+          BR2_PACKAGE_XDRIVER_XORG_INPUT_EVDEV=y
+          BR2_PACKAGE_XDRIVER_XORG_INPUT_KEYBOARD=y
+          BR2_PACKAGE_XDRIVER_XORG_INPUT_MOUSE=y
+          
+          # VirtIO DRM/KMS DDX driver for X11
+          BR2_PACKAGE_XDRIVER_XORG_VIDEO_MODESETTING=y
+          
+          # Window Manager & Environment
+          BR2_PACKAGE_OPENBOX=y
+          
+          # Ensure appropriate file systems are generated
+          BR2_TARGET_ROOTFS_EXT2=y
+          BR2_TARGET_ROOTFS_EXT2_4=y
+          BR2_TARGET_ROOTFS_EXT2_SIZE="512M"
+          EOF
+          
+          # Re-apply config to resolve dependencies cleanly
+          make qemu_aarch64_virt_defconfig
+
+      - name: Compile Buildroot
+        run: |
+          cd buildroot
+          # Build rootfs (using max parallel jobs allowed by runner runner)
+          make -j$(nproc)
+
+      - name: Upload Build Artifacts
+        uses: actions/artifacts@v4
+        with:
+          name: buildroot-qemu-arm64-gui
+          path: |
+            buildroot/output/images/Image
+            buildroot/output/images/rootfs.ext4
+            
