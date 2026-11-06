@@ -68,11 +68,10 @@ jobs:
           # Build rootfs (using max parallel jobs allowed by runner runner)
           make -j$(nproc)
 
-      - name: Upload Build Artifacts
-        uses: actions/artifacts@v4
+            - name: Upload Build Artifacts
+        uses: actions/upload-artifact@v4
         with:
           name: buildroot-qemu-arm64-gui
           path: |
             buildroot/output/images/Image
             buildroot/output/images/rootfs.ext4
-            
